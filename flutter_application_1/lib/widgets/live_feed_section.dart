@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:flutter/foundation.dart'; // For kIsWeb
 import '../main.dart'; // Import to access the 'cameras' list
 import '../services/pose_detection_service.dart';
 
@@ -19,7 +20,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    if (!kIsWeb) {
+      _initializeCamera();
+    }
   }
 
   // Logic to find the FRONT camera (since this is a selfie app)
@@ -45,6 +48,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
       if (!mounted) return;
 
       // Start streaming images for pose detection
+      // on Web calling startImageStream might fail or cause issues if not supported
       await _controller!.startImageStream((CameraImage image) async {
         final poses = await _poseDetectionService.detectPose(
           image,
@@ -82,6 +86,19 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   Widget build(BuildContext context) {
     // 60% of the screen height is handled by the parent Column,
     // so we just fill the available space here.
+    if (kIsWeb) {
+      return Container(
+        color: Colors.black,
+        child: const Center(
+          child: Text(
+            "Camera Pose Detection not supported on Web.\nPlease use Android/iOS.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: Colors.black,
       child: Stack(
