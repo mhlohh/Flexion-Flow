@@ -24,6 +24,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   Size? _cameraImageSize;
   InputImageRotation? _rotation;
   CameraDescription? _frontCamera;
+  double _currentAngle = 0.0; // Angle state
 
   @override
   void initState() {
@@ -36,6 +37,8 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   // Logic to find the FRONT camera (since this is a selfie app)
   void _initializeCamera() async {
     if (cameras.isEmpty) return;
+
+    // ... (rest of filtering logic)
 
     // Find the front-facing camera
     _frontCamera = cameras.firstWhere(
@@ -65,40 +68,32 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
         if (!mounted) return;
 
+        // 🔥 DEBUG
+        debugPrint("🔥🔥🔥 DETECTED POSES: ${poses.length}");
+
+        // Calculate Angle
+        double angle = 0.0;
+        if (poses.isNotEmpty) {
+          final pose = poses.first;
+          final shoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
+          final elbow = pose.landmarks[PoseLandmarkType.rightElbow];
+          final wrist = pose.landmarks[PoseLandmarkType.rightWrist];
+
+          if (shoulder != null && elbow != null && wrist != null) {
+            angle = PoseDetectionService.getAngle(shoulder, elbow, wrist);
+          }
+        }
+
         setState(() {
           _poses = poses;
+          _currentAngle = angle; // Update state
           _cameraImageSize = Size(
             image.width.toDouble(),
             image.height.toDouble(),
           );
-          _rotation = InputImageRotation
-              .rotation270deg; // Default for front camera usually
-          // Better rotation logic:
-
-          // Assuming portrait for now as in service
-          final sensorOrientation = _frontCamera!.sensorOrientation;
-          var rotationCompensation = 0;
-          if (defaultTargetPlatform == TargetPlatform.android) {
-            rotationCompensation =
-                (sensorOrientation + 0) % 360; // 0 for portraitUp
-            _rotation = InputImageRotationValue.fromRawValue(
-              rotationCompensation,
-            );
-          } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-            _rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-          }
+          _rotation =
+              InputImageRotation.rotation270deg; // Force 270 per debugging
         });
-
-        // 🔥🔥🔥 DETECTED POSES DEBUG LOG
-        print("🔥🔥🔥 DETECTED POSES: ${poses.length}");
-
-        if (poses.isNotEmpty) {
-          final pose = poses.first;
-          final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
-          if (rightElbow != null) {
-            print("👉 Elbow X: ${rightElbow.x}, Y: ${rightElbow.y}");
-          }
-        }
       });
 
       setState(() {
@@ -112,8 +107,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   @override
   void dispose() {
     _controller?.stopImageStream();
-    _controller
-        ?.dispose(); // CRITICAL: Failure to do this will crash the app on restart
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -152,7 +146,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
               painter: PosePainter(_poses, _cameraImageSize!, _rotation!),
             ),
 
-          // 3. The Score Overlay (Static for now)
+          // 3. The Score/Angle Overlay
           Positioned(
             top: 40,
             right: 20,
@@ -162,9 +156,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text(
-                "Score: 0",
-                style: TextStyle(
+              child: Text(
+                "Angle: ${_currentAngle.toStringAsFixed(1)}°",
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,

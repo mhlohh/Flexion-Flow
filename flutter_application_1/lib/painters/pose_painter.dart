@@ -10,99 +10,60 @@ class PosePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Define a "Debug Paint"
-    final debugPaint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 10
-      ..style = PaintingStyle.fill;
-
-    // 2. Force draw a circle in the middle of the screen
-    canvas.drawCircle(const Offset(200, 200), 50, debugPaint);
-
+    // Style: Yellow for Joints, White for Bones (High contrast)
     final paintJoint = Paint()
       ..style = PaintingStyle.fill
       ..strokeWidth = 4.0
-      ..color = Colors.blue;
+      ..color = Colors.yellow;
 
     final paintBone = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
+      ..strokeWidth = 3.0
       ..color = Colors.white;
 
     for (final pose in poses) {
-      // Landmarks
-      final rightShoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-      final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
-      final rightWrist = pose.landmarks[PoseLandmarkType.rightWrist];
+      // 1. Draw All Landmarks (Joints)
+      pose.landmarks.forEach((_, landmark) {
+        if (landmark.likelihood > 0.5) {
+          final x = translateX(landmark.x, rotation, size, absoluteImageSize);
+          final y = translateY(landmark.y, rotation, size, absoluteImageSize);
+          canvas.drawCircle(Offset(x, y), 5, paintJoint);
+        }
+      });
 
-      // Check nulls
-      if (rightShoulder == null || rightElbow == null || rightWrist == null) {
-        continue;
+      // 2. Define Connections (Bones)
+      final connections = [
+        [PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder],
+        [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
+        [PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist],
+        [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow],
+        [PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist],
+        [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
+        [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
+        [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip],
+        [PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee],
+        [PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle],
+        [PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee],
+        [PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle],
+      ];
+
+      // 3. Draw Bones
+      for (final pair in connections) {
+        final joint1 = pose.landmarks[pair[0]];
+        final joint2 = pose.landmarks[pair[1]];
+
+        if (joint1 != null &&
+            joint2 != null &&
+            joint1.likelihood > 0.5 &&
+            joint2.likelihood > 0.5) {
+          final x1 = translateX(joint1.x, rotation, size, absoluteImageSize);
+          final y1 = translateY(joint1.y, rotation, size, absoluteImageSize);
+          final x2 = translateX(joint2.x, rotation, size, absoluteImageSize);
+          final y2 = translateY(joint2.y, rotation, size, absoluteImageSize);
+
+          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paintBone);
+        }
       }
-
-      // Check likelihood > 0.5
-      if (rightShoulder.likelihood < 0.5 ||
-          rightElbow.likelihood < 0.5 ||
-          rightWrist.likelihood < 0.5) {
-        continue;
-      }
-
-      // Transform coordinates
-      final shoulderX = translateX(
-        rightShoulder.x,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-      final shoulderY = translateY(
-        rightShoulder.y,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-
-      final elbowX = translateX(
-        rightElbow.x,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-      final elbowY = translateY(
-        rightElbow.y,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-
-      final wristX = translateX(
-        rightWrist.x,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-      final wristY = translateY(
-        rightWrist.y,
-        rotation,
-        size,
-        absoluteImageSize,
-      );
-
-      // Draw Bones
-      canvas.drawLine(
-        Offset(shoulderX, shoulderY),
-        Offset(elbowX, elbowY),
-        paintBone,
-      );
-      canvas.drawLine(
-        Offset(elbowX, elbowY),
-        Offset(wristX, wristY),
-        paintBone,
-      );
-
-      // Draw Joints (Radius 8)
-      canvas.drawCircle(Offset(shoulderX, shoulderY), 8, paintJoint);
-      canvas.drawCircle(Offset(elbowX, elbowY), 8, paintJoint);
-      canvas.drawCircle(Offset(wristX, wristY), 8, paintJoint);
     }
   }
 
