@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../main.dart'; // Import to access the 'cameras' list
+import '../services/pose_detection_service.dart';
 
 class LiveFeedSection extends StatefulWidget {
   const LiveFeedSection({super.key});
@@ -12,6 +14,7 @@ class LiveFeedSection extends StatefulWidget {
 class _LiveFeedSectionState extends State<LiveFeedSection> {
   CameraController? _controller; // Nullable because it might not load instantly
   bool _isCameraInitialized = false;
+  final PoseDetectionService _poseDetectionService = PoseDetectionService();
 
   @override
   void initState() {
@@ -40,6 +43,23 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
     try {
       await _controller!.initialize();
       if (!mounted) return;
+
+      // Start streaming images for pose detection
+      await _controller!.startImageStream((CameraImage image) async {
+        final poses = await _poseDetectionService.detectPose(
+          image,
+          frontCamera,
+        );
+        if (poses.isNotEmpty) {
+          // For verification: Print Right Elbow coordinates
+          final pose = poses.first;
+          final rightElbow = pose.landmarks[PoseLandmarkType.rightElbow];
+          if (rightElbow != null) {
+            print('Elbow Pos: x=${rightElbow.x}, y=${rightElbow.y}');
+          }
+        }
+      });
+
       setState(() {
         _isCameraInitialized = true;
       });
@@ -50,8 +70,11 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
   @override
   void dispose() {
+    _controller?.stopImageStream();
     _controller
         ?.dispose(); // CRITICAL: Failure to do this will crash the app on restart
+    // Note: We don't dispose the singleton service here as it might be used elsewhere,
+    // but if we wanted to close the detector we could add a method for that.
     super.dispose();
   }
 
