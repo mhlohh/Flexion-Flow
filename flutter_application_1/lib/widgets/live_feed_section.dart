@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb
-import 'package:flutter/services.dart';
 import '../main.dart'; // Import to access the 'cameras' list
 import '../services/pose_detection_service.dart';
 import '../painters/pose_painter.dart';

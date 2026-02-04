@@ -2,7 +2,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart'; // Added for debugPrint and defaultTargetPlatform
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import 'dart:typed_data';
 import 'dart:math' as math; // Import math at top
 
 class PoseDetectionService {
