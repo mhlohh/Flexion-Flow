@@ -11,8 +11,19 @@ class PosePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // 1. Get the fitted rectangle (BoxFit.cover) matches CameraPreview logic
-    // We stick to "No Swap" (Vertical) based on User confirmation.
-    final sourceSize = absoluteImageSize;
+    // CRITICAL FIX: The CameraPreview shows the ROTATED (Upright) image.
+    // So we must fit the ROTATED aspect ratio to the screen.
+    // ML Kit also seemingly returns coordinates in the ROTATED (Upright) space
+    // (since "Direct Mapped" x=x, y=y resulted in Vertical orientation).
+
+    final isRotated =
+        rotation == InputImageRotation.rotation90deg ||
+        rotation == InputImageRotation.rotation270deg;
+
+    final sourceSize = isRotated
+        ? Size(absoluteImageSize.height, absoluteImageSize.width)
+        : absoluteImageSize;
+
     final fitted = applyBoxFit(BoxFit.cover, sourceSize, size);
     final destination = fitted.destination;
 
@@ -34,7 +45,7 @@ class PosePainter extends CustomPainter {
     for (final pose in poses) {
       Offset transform(PoseLandmark landmark) {
         // Step 1: Normalize (0..1)
-        // using raw buffer size
+        // using SOURCE size (Upright/Rotated dimensions)
         double px = landmark.x / sourceSize.width;
         double py = landmark.y / sourceSize.height;
 

@@ -23,7 +23,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   Size? _cameraImageSize;
   InputImageRotation? _rotation;
   CameraDescription? _frontCamera;
-  double _currentAngle = 0.0; // Angle state
+  double _currentAngle = 0.0;
+  String _feedbackMessage = "Keep Moving";
+  Color _feedbackColor = Colors.orange;
 
   @override
   void initState() {
@@ -36,8 +38,6 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   // Logic to find the FRONT camera (since this is a selfie app)
   void _initializeCamera() async {
     if (cameras.isEmpty) return;
-
-    // ... (rest of filtering logic)
 
     // Find the front-facing camera
     _frontCamera = cameras.firstWhere(
@@ -72,6 +72,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
         // Calculate Angle
         double angle = 0.0;
+        String message = "Keep Moving";
+        Color color = Colors.orange;
+
         if (poses.isNotEmpty) {
           final pose = poses.first;
           final shoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
@@ -80,18 +83,28 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
           if (shoulder != null && elbow != null && wrist != null) {
             angle = PoseDetectionService.getAngle(shoulder, elbow, wrist);
+
+            // Feedback Logic
+            if (angle < 50) {
+              color = Colors.green;
+              message = "Good Hold";
+            } else if (angle > 160) {
+              color = Colors.blue;
+              message = "Fully Extended";
+            }
           }
         }
 
         setState(() {
           _poses = poses;
-          _currentAngle = angle; // Update state
+          _currentAngle = angle;
+          _feedbackMessage = message;
+          _feedbackColor = color;
           _cameraImageSize = Size(
             image.width.toDouble(),
             image.height.toDouble(),
           );
-          _rotation =
-              InputImageRotation.rotation270deg; // Force 270 per debugging
+          _rotation = InputImageRotation.rotation270deg;
         });
       });
 
@@ -113,6 +126,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
+      // ... (web check) ...
       return Container(
         color: Colors.black,
         child: const Center(
@@ -133,9 +147,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
           // 1. The Camera Feed
           _isCameraInitialized
               ? CameraPreview(_controller!)
-              : const Center(
-                  child: CircularProgressIndicator(),
-                ), // Loading spinner
+              : const Center(child: CircularProgressIndicator()),
           // 2. Pose Painter Overlay
           if (_isCameraInitialized &&
               _poses.isNotEmpty &&
@@ -159,13 +171,26 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
                   color: Colors.black87, // High contrast opaque background
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  "Angle: ${_currentAngle.toStringAsFixed(1)}°",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28, // Bigger text
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Angle: ${_currentAngle.toStringAsFixed(1)}°",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _feedbackMessage,
+                      style: TextStyle(
+                        color: _feedbackColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
