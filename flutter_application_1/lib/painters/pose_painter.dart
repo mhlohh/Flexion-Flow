@@ -10,28 +10,49 @@ class PosePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Style: Yellow for Joints, White for Bones (High contrast)
+    // 1. Get the fitted rectangle (BoxFit.cover) matches CameraPreview logic
+    // We stick to "No Swap" (Vertical) based on User confirmation.
+    final sourceSize = absoluteImageSize;
+    final fitted = applyBoxFit(BoxFit.cover, sourceSize, size);
+    final destination = fitted.destination;
+
+    // Calculate the rect within the canvas (centering it)
+    // applyBoxFit returns the geometry, but we need to center that geometry on the canvas.
+    // If destination is larger than size (BoxFit.cover), we center it.
+    final rect = Alignment.center.inscribe(destination, Offset.zero & size);
+
+    // Style
     final paintJoint = Paint()
       ..style = PaintingStyle.fill
       ..strokeWidth = 4.0
       ..color = Colors.yellow;
-
     final paintBone = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0
       ..color = Colors.white;
 
     for (final pose in poses) {
-      // 1. Draw All Landmarks (Joints)
+      Offset transform(PoseLandmark landmark) {
+        // Step 1: Normalize (0..1)
+        // using raw buffer size
+        double px = landmark.x / sourceSize.width;
+        double py = landmark.y / sourceSize.height;
+
+        // Step 2: Mirror X (Selfie)
+        px = 1.0 - px;
+
+        // Step 3: Map to Fitted Rect
+        return Offset(rect.left + px * rect.width, rect.top + py * rect.height);
+      }
+
+      // Draw Landmarks
       pose.landmarks.forEach((_, landmark) {
         if (landmark.likelihood > 0.5) {
-          final x = translateX(landmark.x, rotation, size, absoluteImageSize);
-          final y = translateY(landmark.y, rotation, size, absoluteImageSize);
-          canvas.drawCircle(Offset(x, y), 5, paintJoint);
+          canvas.drawCircle(transform(landmark), 5, paintJoint);
         }
       });
 
-      // 2. Define Connections (Bones)
+      // Draw Bones
       final connections = [
         [PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder],
         [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
@@ -47,7 +68,6 @@ class PosePainter extends CustomPainter {
         [PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle],
       ];
 
-      // 3. Draw Bones
       for (final pair in connections) {
         final joint1 = pose.landmarks[pair[0]];
         final joint2 = pose.landmarks[pair[1]];
@@ -56,49 +76,14 @@ class PosePainter extends CustomPainter {
             joint2 != null &&
             joint1.likelihood > 0.5 &&
             joint2.likelihood > 0.5) {
-          final x1 = translateX(joint1.x, rotation, size, absoluteImageSize);
-          final y1 = translateY(joint1.y, rotation, size, absoluteImageSize);
-          final x2 = translateX(joint2.x, rotation, size, absoluteImageSize);
-          final y2 = translateY(joint2.y, rotation, size, absoluteImageSize);
-
-          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paintBone);
+          canvas.drawLine(transform(joint1), transform(joint2), paintBone);
         }
       }
     }
   }
 
-  double translateX(
-    double x,
-    InputImageRotation rotation,
-    Size size,
-    Size absoluteImageSize,
-  ) {
-    switch (rotation) {
-      case InputImageRotation.rotation90deg:
-      case InputImageRotation.rotation270deg:
-        // Swap width and height for portrait
-        return size.width - (x * size.width / absoluteImageSize.height);
-      default:
-        return x * size.width / absoluteImageSize.width;
-    }
-  }
-
-  double translateY(
-    double y,
-    InputImageRotation rotation,
-    Size size,
-    Size absoluteImageSize,
-  ) {
-    switch (rotation) {
-      case InputImageRotation.rotation90deg:
-      case InputImageRotation.rotation270deg:
-        // Swap width and height for portrait
-        return y * size.height / absoluteImageSize.width;
-      default:
-        return y * size.height / absoluteImageSize.height;
-    }
-  }
-
+  // NOTE: Used internal transform() helper instead of separate methods
+  // to keep all logic (Rotation -> Mirror -> Scale -> Offset) tightly coupled.
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) {
     return oldDelegate.poses != poses ||
