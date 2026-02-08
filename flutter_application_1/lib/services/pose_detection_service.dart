@@ -23,7 +23,7 @@ class PoseDetectionService {
   // Smoothing state
   Map<PoseLandmarkType, PoseLandmark>? _previousLandmarks;
   final double _landmarkSmoothingFactor =
-      0.5; // Balanced smoothing (0.0=frozen, 1.0=raw)
+      0.7; // Stronger smoothing for stability
 
   // Smoothing for angle measurements (Deprecated - using landmark smoothing instead)
   double? _previousAngle;

@@ -34,23 +34,25 @@ class PosePainter extends CustomPainter {
     // Active (Neon)
     final paintBoneActive = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 6.0
+      ..strokeWidth =
+          12.0 // Much Thicker
       ..color = const Color(0xFFE100FF);
 
     final paintJointActive = Paint()
       ..style = PaintingStyle.fill
-      ..strokeWidth = 8.0
+      ..strokeWidth =
+          14.0 // Much Thicker
       ..color = Colors.white;
 
     // Inactive (Dimmed)
     final paintBoneInactive = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
+      ..strokeWidth = 10.0
       ..color = const Color(0xFFE100FF).withValues(alpha: 0.2);
 
     final paintJointInactive = Paint()
       ..style = PaintingStyle.fill
-      ..strokeWidth = 5.0
+      ..strokeWidth = 10.0
       ..color = Colors.white.withValues(alpha: 0.2);
 
     for (final pose in poses) {
@@ -71,8 +73,8 @@ class PosePainter extends CustomPainter {
         final l2 = pose.landmarks[p2];
         if (l1 != null &&
             l2 != null &&
-            l1.likelihood > 0.5 &&
-            l2.likelihood > 0.5) {
+            l1.likelihood > 0.3 && // Lowered from 0.5 to ensure visibility
+            l2.likelihood > 0.3) {
           canvas.drawLine(
             transform(l1),
             transform(l2),
@@ -84,7 +86,8 @@ class PosePainter extends CustomPainter {
       // Helper to draw joint
       void drawJoint(PoseLandmarkType type, bool isActive) {
         final l = pose.landmarks[type];
-        if (l != null && l.likelihood > 0.5) {
+        if (l != null && l.likelihood > 0.3) {
+          // Lowered from 0.5
           canvas.drawCircle(
             transform(l),
             5,

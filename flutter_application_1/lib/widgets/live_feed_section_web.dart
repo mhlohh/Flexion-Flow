@@ -131,7 +131,8 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
                 if (p1 != null && p2 != null && p3 != null) {
                   angle = _calculateAngle(p1, p2, p3);
                   // Feedback Logic
-                  if (angle < 45) {
+                  if (angle < 50) {
+                    // User requested 50 for Web
                     color = Colors.blue;
                     message = "FLEXED";
                   } else if (angle > 160) {

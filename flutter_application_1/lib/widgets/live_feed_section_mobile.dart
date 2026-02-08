@@ -29,6 +29,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   double _currentAngle = 0.0;
   String _feedbackMessage = "Keep Moving";
   Color _feedbackColor = Colors.orange;
+  bool _isRightSide = true;
+  DateTime _lastValidPoseTime = DateTime.now(); // For Persistence Logic
+  int _sideSwitchCounter = 0; // Debounce counter for side switching
 
   @override
   void initState() {
@@ -73,22 +76,70 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
         if (!mounted) return;
 
         // Calculate Angle for UI
-        double angle = 0.0;
-        String message = "Keep Moving";
-        Color color = Colors.orange;
+        double angle = _currentAngle; // Default to last known
+        String message = _feedbackMessage;
+        Color color = _feedbackColor;
+        bool isRight = _isRightSide;
+        List<Pose> posesToDisplay = _poses; // Default to holding last pose
 
+        // PERSISTENCE LOGIC
+        // If we found a pose, update everything
         if (poses.isNotEmpty) {
+          posesToDisplay = poses;
+          _lastValidPoseTime = DateTime.now(); // Reset timer
+
           final pose = poses.first;
-          final shoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-          final elbow = pose.landmarks[PoseLandmarkType.rightElbow];
-          final wrist = pose.landmarks[PoseLandmarkType.rightWrist];
+          // Side Detection Logic
+          // ROBUST SIDE SWITCHING: Simple Hysteresis (Like Web)
+          // Summing Likelihoods (0.0 - 3.0)
+          final double leftScore =
+              (pose.landmarks[PoseLandmarkType.leftShoulder]?.likelihood ?? 0) +
+              (pose.landmarks[PoseLandmarkType.leftElbow]?.likelihood ?? 0) +
+              (pose.landmarks[PoseLandmarkType.leftWrist]?.likelihood ?? 0);
 
-          if (shoulder != null && elbow != null && wrist != null) {
-            angle = PoseDetectionService.getAngle(shoulder, elbow, wrist);
+          final double rightScore =
+              (pose.landmarks[PoseLandmarkType.rightShoulder]?.likelihood ??
+                  0) +
+              (pose.landmarks[PoseLandmarkType.rightElbow]?.likelihood ?? 0) +
+              (pose.landmarks[PoseLandmarkType.rightWrist]?.likelihood ?? 0);
 
+          // Buffer: Change side only if Other > Current + 0.2
+          // This worked perfectly on Web.
+          if (leftScore > rightScore + 0.2) {
+            isRight = false;
+          } else if (rightScore > leftScore + 0.2) {
+            isRight = true;
+          }
+
+          // Extract Landmarks for Active Side
+          final shoulder =
+              pose.landmarks[isRight
+                  ? PoseLandmarkType.rightShoulder
+                  : PoseLandmarkType.leftShoulder];
+          final elbow =
+              pose.landmarks[isRight
+                  ? PoseLandmarkType.rightElbow
+                  : PoseLandmarkType.leftElbow];
+          final wrist =
+              pose.landmarks[isRight
+                  ? PoseLandmarkType.rightWrist
+                  : PoseLandmarkType.leftWrist];
+
+          // Check for VALIDITY before calculating Angle
+          // Prevent calculating "stuck" angles from ghost limbs
+          bool isValid =
+              shoulder != null &&
+              shoulder.likelihood > 0.4 &&
+              elbow != null &&
+              elbow.likelihood > 0.4 &&
+              wrist != null &&
+              wrist.likelihood > 0.4;
+
+          if (isValid) {
+            angle = PoseDetectionService.getAngle(shoulder!, elbow!, wrist!);
             // Feedback Logic
-            if (angle < 45) {
-              // Match Web Parity (<45)
+            if (angle < 60) {
+              // Relaxed to 60 for Mobile
               color = Colors.blue;
               message = "FLEXED";
             } else if (angle > 160) {
@@ -97,22 +148,33 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
             } else {
               message = "MOVING";
             }
+          } else {
+            // OPTIONAL: If confidence drops, keep old angle?
+            // Or maybe dim text color? For now, we keep old angle but don't update junk.
+          }
+        } else {
+          // NO POSE DETECTED
+          // Check if we typically assume the user is still there (Persistence)
+          // If < 2 seconds since last pose, KEEP DISPLAYING OLD DATA
+          if (DateTime.now().difference(_lastValidPoseTime).inMilliseconds <
+              2000) {
+            // Do NOT clear posesToDisplay. Keep it as _poses.
+            // Do NOT change angle/message.
+          } else {
+            // Timed out. Clear screen.
+            posesToDisplay = [];
+            angle = 0.0;
+            message = "Keep Moving";
           }
         }
 
-        // Only update UI if there are actual changes
-        bool shouldUpdate =
-            poses.length != _poses.length ||
-            (_currentAngle - angle).abs() >
-                1.0 || // Update if angle changed > 1 degree
-            message != _feedbackMessage;
-
-        if (shouldUpdate) {
+        if (mounted) {
           setState(() {
-            _poses = poses;
+            _poses = posesToDisplay;
             _currentAngle = angle;
             _feedbackMessage = message;
             _feedbackColor = color;
+            _isRightSide = isRight;
             _cameraImageSize = Size(
               image.width.toDouble(),
               image.height.toDouble(),
