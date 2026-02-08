@@ -12,16 +12,37 @@ class PoseDetectionService {
   PoseDetectionService._internal();
 
   final PoseDetector _poseDetector = PoseDetector(
-    options: PoseDetectorOptions(),
+    options: PoseDetectorOptions(
+      mode: PoseDetectionMode.stream, // Optimized for real-time video
+    ),
   );
   bool _isBusy = false;
+
+  // Smoothing state
+  Map<PoseLandmarkType, PoseLandmark>? _previousLandmarks;
+  final double _landmarkSmoothingFactor =
+      0.5; // Balanced smoothing (0.0=frozen, 1.0=raw)
+
+  // Smoothing for angle measurements (Deprecated - using landmark smoothing instead)
+  double? _previousAngle;
+  // _smoothingFactor removed as it's no longer used
+
+  int _frameCount = 0;
+  final int _processEveryNthFrame =
+      2; // Reduced from 3 to 2 for smoother tracking
 
   Future<List<Pose>> detectPose(
     CameraImage image,
     CameraDescription camera,
     DeviceOrientation deviceOrientation,
   ) async {
-    // Throttling: Drop frames if busy
+    // Frame skipping
+    _frameCount++;
+    if (_frameCount % _processEveryNthFrame != 0) {
+      return [];
+    }
+
+    // Throttling
     if (_isBusy) return [];
     _isBusy = true;
 
@@ -35,27 +56,68 @@ class PoseDetectionService {
 
       final poses = await _poseDetector.processImage(inputImage);
 
-      // 🔥 DEBUG: Print the Angle
-      if (poses.isNotEmpty) {
-        final pose = poses.first;
-        final shoulder = pose.landmarks[PoseLandmarkType.rightShoulder];
-        final elbow = pose.landmarks[PoseLandmarkType.rightElbow];
-        final wrist = pose.landmarks[PoseLandmarkType.rightWrist];
-
-        if (shoulder != null && elbow != null && wrist != null) {
-          final angle = getAngle(shoulder, elbow, wrist);
-          debugPrint(
-            "💪 ARM ANGLE: ${angle.toStringAsFixed(1)}°",
-          ); // Look for this!
-        }
+      if (poses.isEmpty) {
+        _previousLandmarks = null; // Reset smoothing on loss of tracking
+        return [];
       }
-      return poses;
+
+      // Apply smoothing to the first pose (assuming single user)
+      final rawPose = poses.first;
+      final smoothedPose = _smoothPose(rawPose);
+
+      return [smoothedPose];
     } catch (e) {
-      debugPrint('Error detecting pose: $e'); // Changed print to debugPrint
+      debugPrint('Error detecting pose: $e');
       return [];
     } finally {
       _isBusy = false;
     }
+  }
+
+  // Smooth all landmarks in a pose
+  Pose _smoothPose(Pose rawPose) {
+    if (_previousLandmarks == null) {
+      _previousLandmarks = rawPose.landmarks;
+      return rawPose;
+    }
+
+    final Map<PoseLandmarkType, PoseLandmark> smoothedLandmarks = {};
+
+    rawPose.landmarks.forEach((type, currentLandmark) {
+      final previousLandmark = _previousLandmarks![type];
+
+      if (previousLandmark == null) {
+        smoothedLandmarks[type] = currentLandmark;
+      } else {
+        // Apply EWMA smoothing to X, Y, and Z
+        final double smoothX =
+            (_landmarkSmoothingFactor * currentLandmark.x) +
+            ((1 - _landmarkSmoothingFactor) * previousLandmark.x);
+
+        final double smoothY =
+            (_landmarkSmoothingFactor * currentLandmark.y) +
+            ((1 - _landmarkSmoothingFactor) * previousLandmark.y);
+
+        final double smoothZ =
+            (_landmarkSmoothingFactor * currentLandmark.z) +
+            ((1 - _landmarkSmoothingFactor) * previousLandmark.z);
+
+        // Confidence is generally just taken from the current frame
+        // or could be smoothed too, but raw is usually safer for filtering.
+        smoothedLandmarks[type] = PoseLandmark(
+          type: type,
+          x: smoothX,
+          y: smoothY,
+          z: smoothZ,
+          likelihood: currentLandmark.likelihood,
+        );
+      }
+    });
+
+    _previousLandmarks = smoothedLandmarks;
+
+    // Return a NEW Pose object with smoothed landmarks
+    return Pose(landmarks: smoothedLandmarks);
   }
 
   InputImage? _inputImageFromCameraImage(
@@ -184,6 +246,9 @@ class PoseDetectionService {
 
     return angle;
   }
+
+  // Get the current smoothed angle (returns null if no angle detected yet)
+  double? get currentSmoothedAngle => _previousAngle;
 
   void dispose() {
     _poseDetector.close();

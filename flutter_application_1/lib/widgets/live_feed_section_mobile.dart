@@ -95,17 +95,29 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
           }
         }
 
-        setState(() {
-          _poses = poses;
-          _currentAngle = angle;
-          _feedbackMessage = message;
-          _feedbackColor = color;
-          _cameraImageSize = Size(
-            image.width.toDouble(),
-            image.height.toDouble(),
-          );
-          _rotation = InputImageRotation.rotation270deg;
-        });
+        // Only update UI if there are actual changes
+        if (poses.isNotEmpty || _poses.isNotEmpty) {
+          // Check if we need to update (avoid unnecessary setState)
+          bool shouldUpdate =
+              poses.length != _poses.length ||
+              (_currentAngle - angle).abs() >
+                  0.5 || // Only update if angle changed by >0.5°
+              message != _feedbackMessage;
+
+          if (shouldUpdate) {
+            setState(() {
+              _poses = poses;
+              _currentAngle = angle;
+              _feedbackMessage = message;
+              _feedbackColor = color;
+              _cameraImageSize = Size(
+                image.width.toDouble(),
+                image.height.toDouble(),
+              );
+              _rotation = InputImageRotation.rotation270deg;
+            });
+          }
+        }
       });
 
       setState(() {
