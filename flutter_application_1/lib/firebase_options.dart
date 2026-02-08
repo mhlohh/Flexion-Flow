@@ -42,8 +42,8 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCI3vVtLC5WVj52nv6siayXcyBYM_Boe_4',
-    appId: '1:353454091403:web:REPLACE_WITH_YOUR_WEB_APP_ID', // ⚠️ PLACEHOLDER
+    apiKey: 'AIzaSyCXnDjDBqhsnPS7_VAU2vmZset1dnMxy9w', // Corrected API Key
+    appId: '1:353454091403:web:5c54ad5dd2b74c608c788e', // From screenshot
     messagingSenderId: '353454091403',
     projectId: 'flexion-flow',
     authDomain: 'flexion-flow.firebaseapp.com',

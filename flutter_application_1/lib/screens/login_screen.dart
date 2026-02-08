@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -93,40 +94,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Spacer(flex: 3),
 
                 // Google Sign-In Button
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton.icon(
-                        onPressed: _handleGoogleSignIn,
-                        icon: Image.asset(
-                          'assets/google_logo.png',
-                          height: 24,
-                          width: 24,
-                          errorBuilder: (context, error, stackTrace) {
-                            // Fallback to icon if image not found
-                            return const Icon(Icons.g_mobiledata, size: 24);
-                          },
-                        ),
-                        label: const Text(
-                          'Sign in with Google',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          minimumSize: const Size(double.infinity, 56),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: Colors.grey.shade300,
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                      ),
+                // Replaced with platform-aware widget
+                GoogleSignInButton(
+                  onPressed: _handleGoogleSignIn,
+                  isLoading: _isLoading,
+                ),
 
                 const Spacer(flex: 2),
 

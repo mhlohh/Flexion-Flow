@@ -19,6 +19,22 @@ class AuthService {
     if (_isInitialized) return;
 
     try {
+      if (kIsWeb) {
+        // Init listener for Web GIS flow (v7+)
+        // Use dynamic cast to access authenticationEvents if type definition is updated/missing/hidden
+        (_googleSignIn as dynamic).authenticationEvents.listen((event) async {
+          try {
+            // Check if event has a user property
+            final user = (event as dynamic).user;
+            if (user != null && user is GoogleSignInAccount) {
+              await _handleWebSignIn(user);
+            }
+          } catch (e) {
+            // Ignore
+          }
+        });
+      }
+
       await _googleSignIn.initialize(
         // Web Client ID from Firebase Console (OAuth 2.0 client)
         clientId:
@@ -44,18 +60,18 @@ class AuthService {
 
     try {
       // Trigger the Google Sign-In flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn
-          .authenticate();
-
-      // If user cancels the sign-in, return null
-      if (googleUser == null) {
-        debugPrint('User cancelled Google Sign-In');
+      final GoogleSignInAccount googleUser;
+      if (kIsWeb) {
+        // signIn() is removed in v7. Web must use the renderButton concept in UI.
+        // We cannot initiate a dynamic sign in here for Web anymore.
+        debugPrint("Web Sign-In requires renderButton in UI");
         return null;
+      } else {
+        googleUser = await _googleSignIn.authenticate();
       }
 
       // Obtain auth details from request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
       // Create a new credential
       final credential = GoogleAuthProvider.credential(
@@ -75,6 +91,29 @@ class AuthService {
     } catch (e) {
       debugPrint('Error signing in with Google: $e');
       return null;
+    }
+  }
+
+  // Handle Web Sign-In result
+  Future<void> _handleWebSignIn(GoogleSignInAccount googleUser) async {
+    try {
+      debugPrint('Handling Web Sign-In for: ${googleUser.email}');
+      // Obtain auth details from request
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
+
+      debugPrint('Successfully signed in (Web): ${userCredential.user?.email}');
+    } catch (e) {
+      debugPrint('Error in Web Sign-In flow: $e');
     }
   }
 

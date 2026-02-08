@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "flutter_application_1 (Web 5000)",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--web-port",
+                "5050"
+            ]
+        },
+        {
+            "name": "flutter_application_1 (Mobile)",
+            "request": "launch",
+            "type": "dart"
+        }
+    ]
+}

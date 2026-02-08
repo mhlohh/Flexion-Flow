@@ -6,6 +6,8 @@ import 'dart:ui_web' as ui_web;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import 'glass_feedback_panel.dart'; // Import Glass Widget
+
 class LiveFeedSection extends StatefulWidget {
   const LiveFeedSection({super.key});
 
@@ -20,6 +22,12 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   bool _isCameraInitialized = false;
   List<dynamic> _webLandmarks = [];
   Size _videoSize = Size.zero;
+
+  // Feedback State
+  double _currentAngle = 0.0;
+  String _feedbackMessage = "Keep Moving";
+  Color _feedbackColor = Colors.orange;
+  bool _isRightSide = true; // Track dominant side
 
   @override
   void initState() {
@@ -78,36 +86,105 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
       final onPoseResults = (JSAny? landmarks) {
         if (!mounted) return;
 
-        // Convert JS Array to Dart List
-        if (landmarks != null) {
-          // landmarks is likely an Array of objects
-          // We can treat it as JSAny and convert if it's an array
-          // Or just pass it to the painter and let painter extract properties safely
-          // But CustomPainter expects List<dynamic> currently.
+        print('🎯 Dart callback received data');
 
-          // Simplest is to keep it as List<dynamic> by converting
-          // assuming landmarks is a JS Array.
+        if (landmarks != null) {
           try {
-            final list = (landmarks as JSArray?)?.toDart;
-            if (list != null) {
+            final jsArray = landmarks as JSArray;
+            final list = jsArray.toDart;
+
+            print('📦 Converted list length: ${list.length}');
+
+            if (list.isNotEmpty) {
+              // Calculate Angle
+              double angle = _currentAngle;
+              String message = _feedbackMessage;
+              Color color = _feedbackColor;
+              bool isRight = _isRightSide; // Keep current by default
+
+              // Indexes for Right Arm: 12 (Shoulder), 14 (Elbow), 16 (Wrist)
+              if (list.length > 20) {
+                // Side Detection (Visibility Hysteresis)
+                // Left: 11, 13, 15
+                // Right: 12, 14, 16
+                final double leftScore =
+                    _getLikelihood(list, 11) +
+                    _getLikelihood(list, 13) +
+                    _getLikelihood(list, 15);
+                final double rightScore =
+                    _getLikelihood(list, 12) +
+                    _getLikelihood(list, 14) +
+                    _getLikelihood(list, 16);
+
+                // Buffer: Change side only if significant (> 0.2 diff)
+                if (leftScore > rightScore + 0.2) {
+                  isRight = false;
+                } else if (rightScore > leftScore + 0.2) {
+                  isRight = true;
+                }
+
+                // Get landmarks for the ACTIVE side
+                final p1 = _getRawLandmark(list, isRight ? 12 : 11); // Shoulder
+                final p2 = _getRawLandmark(list, isRight ? 14 : 13); // Elbow
+                final p3 = _getRawLandmark(list, isRight ? 16 : 15); // Wrist
+
+                if (p1 != null && p2 != null && p3 != null) {
+                  angle = _calculateAngle(p1, p2, p3);
+                  // Feedback Logic
+                  if (angle < 45) {
+                    color = Colors.blue;
+                    message = "FLEXED";
+                  } else if (angle > 160) {
+                    color = Colors.green;
+                    message = "EXTENDED";
+                  } else {
+                    message = "MOVING";
+                  }
+                }
+              }
+
               setState(() {
                 _webLandmarks = list;
+                _currentAngle = angle;
+                _feedbackMessage = message;
+                _feedbackColor = color;
+                _isRightSide = isRight;
               });
             }
           } catch (e) {
-            print('Error converting landmarks: $e');
+            print('🚨 Dart Error: $e');
           }
+        } else {
+          print('⚠️ Landmarks is null');
         }
       }.toJS;
 
-      // Access global poseWorker
-      final worker = web.window.getProperty('poseWorker'.toJS) as JSObject?;
+      // Access global poseWorker with retry
+      JSObject? worker;
+      int attempts = 0;
+      while (attempts < 10) {
+        worker = web.window.getProperty('poseWorker'.toJS) as JSObject?;
+        if (worker != null) break;
+        print('⏳ [Web] Waiting for poseWorker... ($attempts)');
+        await Future.delayed(const Duration(milliseconds: 500));
+        attempts++;
+      }
 
       if (worker != null) {
+        print('✅ [Web] poseWorker found! Calling initialize...');
+
+        // Direct property set to ensure it exists
+        worker.setProperty('onResultsCallback'.toJS, onPoseResults);
+
+        // Pass it in initialize too, just in case
         worker.callMethod('initialize'.toJS, null, onPoseResults);
+
+        print('✅ [Web] Calling startCamera...');
         worker.callMethod('startCamera'.toJS, _videoElement);
       } else {
-        print('❌ [Web] poseWorker is NULL.');
+        print(
+          '❌ [Web] poseWorker is NULL after retries. Check index.html imports.',
+        );
       }
 
       setState(() {
@@ -136,24 +213,100 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
               painter: WebPosePainter(
                 landmarks: _webLandmarks,
                 sourceSize: _videoSize,
+                isRightSide: _isRightSide,
               ),
             ),
+
+          // Glassmorphic Feedback Overlay
+          Positioned(
+            bottom: 40,
+            left: 20,
+            right: 20,
+            child: Center(
+              child: GlassFeedbackPanel(
+                angle: _currentAngle,
+                feedback: _feedbackMessage,
+                color: _feedbackColor,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  // Helper to extract x,y from the raw JS List
+  Offset? _getRawLandmark(List<dynamic> landmarks, int index) {
+    if (index >= landmarks.length) return null;
+    final lm = landmarks[index];
+    if (lm == null) return null;
+
+    try {
+      final lmObj = lm as JSObject;
+      // x, y are normalized [0,1]
+      final x = (lmObj.getProperty('x'.toJS) as JSNumber).toDartDouble;
+      final y = (lmObj.getProperty('y'.toJS) as JSNumber).toDartDouble;
+      return Offset(x, y);
+      return Offset(x, y);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  double _getLikelihood(List<dynamic> landmarks, int index) {
+    if (index >= landmarks.length) return 0.0;
+    final lm = landmarks[index];
+    if (lm == null) return 0.0;
+
+    try {
+      final lmObj = lm as JSObject;
+      // Try 'visibility' (MediaPipe standard) or 'score'
+      // We'll check for visibility first
+      if (lmObj.hasProperty('visibility'.toJS).toDart) {
+        return (lmObj.getProperty('visibility'.toJS) as JSNumber).toDartDouble;
+      }
+      if (lmObj.hasProperty('score'.toJS).toDart) {
+        return (lmObj.getProperty('score'.toJS) as JSNumber).toDartDouble;
+      }
+      return 0.0;
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  double _calculateAngle(Offset first, Offset middle, Offset last) {
+    // atan2(y, x)
+    final double result =
+        math.atan2(last.dy - middle.dy, last.dx - middle.dx) -
+        math.atan2(first.dy - middle.dy, first.dx - middle.dx);
+    double angle = result.abs() * 180.0 / math.pi;
+
+    if (angle > 180.0) {
+      angle = 360.0 - angle;
+    }
+    return angle;
+  }
 }
 
 class WebPosePainter extends CustomPainter {
-  final List<dynamic> landmarks; // These are JSObjects
+  final List<dynamic> landmarks; // JSObjects or Maps
   final Size sourceSize;
+  final bool isRightSide;
 
-  WebPosePainter({required this.landmarks, required this.sourceSize});
+  WebPosePainter({
+    required this.landmarks,
+    required this.sourceSize,
+    this.isRightSide = true,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (landmarks.isEmpty) return;
 
+    // SCALING LOGIC:
+    // Scale the sourceSize (camera resolution) to fit within the widget size (canvas)
+    // keeping aspect ratio.
+    // scale logic
     final fitted = applyBoxFit(BoxFit.contain, sourceSize, size);
     final destinationSize = fitted.destination;
     final sourceRect = Alignment.center.inscribe(
@@ -161,129 +314,143 @@ class WebPosePainter extends CustomPainter {
       Offset.zero & size,
     );
 
-    final paintJoint = Paint()
-      ..color = Colors.blue
-      ..strokeWidth = 4
-      ..style = PaintingStyle.fill;
+    // DEBUG: Draw border around active area
+    // canvas.drawRect(sourceRect, Paint()..color = Colors.red..style = PaintingStyle.stroke..strokeWidth = 2);
 
-    final paintBone = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2
+    // PAINTS
+    // Active
+    final paintBoneActive = Paint()
+      ..color = const Color(0xFFE100FF)
+      ..strokeWidth = 6.0
       ..style = PaintingStyle.stroke;
 
-    // --- 1. Draw Full Body Skeleton ---
-    final connections = [
-      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
-      [11, 23], [12, 24], [23, 24], // Torso
-      [23, 25], [25, 27], [24, 26], [26, 28], // Legs
-    ];
+    final paintJointActive = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
 
-    for (final connection in connections) {
-      final start = _getLandmark(connection[0], sourceRect);
-      final end = _getLandmark(connection[1], sourceRect);
+    final paintJointBorderActive = Paint()
+      ..color = const Color(0xFFE100FF)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+
+    // Inactive (Dimmed)
+    final paintBoneInactive = Paint()
+      ..color = const Color(0xFFE100FF).withValues(alpha: 0.2)
+      ..strokeWidth = 4.0
+      ..style = PaintingStyle.stroke;
+
+    final paintJointInactive = Paint()
+      ..color = Colors.white.withValues(alpha: 0.2)
+      ..style = PaintingStyle.fill;
+
+    final paintJointBorderInactive = Paint()
+      ..color = const Color(0xFFE100FF).withValues(alpha: 0.2)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+
+    // CONNECTIONS (Body parts)
+    // We split them by side
+    final torso = [
+      [11, 12], [23, 24], // Shoulders, Hips
+      [11, 23], [12, 24], // Sides
+    ]; // 11=LeftShoulder, 12=RightShoulder, 23=LeftHip, 24=RightHip
+
+    // Explicit Side Connections
+    // Left: 11-13 (Sh-Elb), 13-15 (Elb-Wri), 11-23 (Body-L), 23-25 (Hip-Knee), 25-27 (Knee-Ank)
+    // Right: 12-14, 14-16, 12-24, 24-26, 26-28
+
+    void drawConnection(int startIdx, int endIdx, bool isActive) {
+      final start = _getLandmark(startIdx, sourceRect);
+      final end = _getLandmark(endIdx, sourceRect);
       if (start != null && end != null) {
-        canvas.drawLine(start, end, paintBone);
-        canvas.drawCircle(start, 4, paintJoint);
-        canvas.drawCircle(end, 4, paintJoint);
+        canvas.drawLine(
+          start,
+          end,
+          isActive ? paintBoneActive : paintBoneInactive,
+        );
       }
     }
 
-    // --- 2. Calculate and Show Angle ---
-    final p1 = _getLandmark(12, sourceRect);
-    final p2 = _getLandmark(14, sourceRect);
-    final p3 = _getLandmark(16, sourceRect);
+    // Draw Torso (Neutral or Active? Let's make Neutral Active)
+    for (var pair in torso) {
+      // Check if connection is specific to a side?
+      // 11-23 is Left Side of body. 12-24 is Right Side.
+      bool isActive = true;
+      if (pair[0] == 11 && pair[1] == 23) isActive = !isRightSide;
+      if (pair[0] == 12 && pair[1] == 24) isActive = isRightSide;
+      drawConnection(pair[0], pair[1], isActive);
+    }
 
-    if (p1 != null && p2 != null && p3 != null) {
-      final angle = _calculateAngle(p1, p2, p3);
+    // Arms
+    drawConnection(11, 13, !isRightSide); // Left Arm top
+    drawConnection(13, 15, !isRightSide); // Left Arm bot
+    drawConnection(12, 14, isRightSide); // Right Arm top
+    drawConnection(14, 16, isRightSide); // Right Arm bot
 
-      Color color;
-      String message;
+    // Legs
+    drawConnection(23, 25, !isRightSide); // Left Leg top
+    drawConnection(25, 27, !isRightSide); // Left Leg bot
+    drawConnection(24, 26, isRightSide); // Right Leg top
+    drawConnection(26, 28, isRightSide); // Right Leg bot
 
-      if (angle < 50) {
-        color = Colors.green;
-        message = "Good Hold";
-      } else if (angle > 160) {
-        color = Colors.blue;
-        message = "Fully Extended";
-      } else {
-        color = Colors.orange;
-        message = "Keep Moving";
+    // Draw Joints
+    for (int i = 0; i < 33; i++) {
+      final point = _getLandmark(i, sourceRect);
+      if (point != null) {
+        // Determine side of joint
+        bool isActive = true;
+        // Odd numbers are usually Left in BlazePose (11, 13, 15...)
+        // Even numbers are Right (12, 14, 16...)
+        // 0 is Nose (Neutral)
+        if (i > 0) {
+          if (i % 2 != 0)
+            isActive = !isRightSide; // Odd = Left
+          else
+            isActive = isRightSide; // Even = Right
+        }
+
+        canvas.drawCircle(
+          point,
+          5.0,
+          isActive ? paintJointActive : paintJointInactive,
+        );
+        canvas.drawCircle(
+          point,
+          5.0,
+          isActive ? paintJointBorderActive : paintJointBorderInactive,
+        );
       }
-
-      final textSpan = TextSpan(
-        text: 'Angle: ${angle.toStringAsFixed(1)}°\n$message',
-        style: TextStyle(
-          color: color,
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
-          backgroundColor: Colors.black54,
-        ),
-      );
-
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.left,
-      );
-
-      textPainter.layout();
-      textPainter.paint(canvas, const Offset(20, 40));
-
-      final highlightPaint = Paint()
-        ..color = color
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(p2, 12, highlightPaint);
-
-      final armPaint = Paint()
-        ..color = color
-        ..strokeWidth = 4
-        ..style = PaintingStyle.stroke;
-
-      canvas.drawLine(p1, p2, armPaint);
-      canvas.drawLine(p2, p3, armPaint);
     }
-  }
 
-  double _calculateAngle(Offset first, Offset middle, Offset last) {
-    final radians =
-        (math.atan2(last.dy - middle.dy, last.dx - middle.dx) -
-                math.atan2(first.dy - middle.dy, first.dx - middle.dx))
-            .abs();
-    var angle = radians * 180.0 / math.pi;
-    if (angle > 180.0) {
-      angle = 360.0 - angle;
-    }
-    return angle;
+    // ANGLE & FEEDBACK LOGIC (REMOVED)
+    // Handled by GlassFeedbackPanel widget in the parent Stack.
   }
 
   Offset? _getLandmark(int index, Rect destinationRect) {
     if (index >= landmarks.length) return null;
 
-    // landmarks[index] is a JSAny/JSObject
-    final lm = landmarks[index];
+    final lm = landmarks[index]; // This is JSAny/JSObject
     if (lm == null) return null;
 
     double x = 0;
     double y = 0;
 
     try {
-      // Use dart:js_interop_unsafe to access properties by name
+      // Robust extraction from JS Object
       final lmObj = lm as JSObject;
-      final xProp = lmObj.getProperty('x'.toJS);
-      final yProp = lmObj.getProperty('y'.toJS);
+      x = (lmObj.getProperty('x'.toJS) as JSNumber).toDartDouble;
+      y = (lmObj.getProperty('y'.toJS) as JSNumber).toDartDouble;
 
-      // Convert JSNumber to double?
-      // With newer interop, we cast to JSNumber then toDouble
-      x = (xProp as JSNumber).toDartDouble;
-      y = (yProp as JSNumber).toDartDouble;
+      // Mediapipe coordinates are normalized [0, 1].
+      // Scale to destinationRect
+      return Offset(
+        destinationRect.left + x * destinationRect.width,
+        destinationRect.top + y * destinationRect.height,
+      );
     } catch (e) {
+      // Fail silently for single frame errors to avoid noise
       return null;
     }
-
-    return Offset(
-      destinationRect.left + x * destinationRect.width,
-      destinationRect.top + y * destinationRect.height,
-    );
   }
 
   @override

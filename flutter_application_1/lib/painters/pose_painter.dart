@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'dart:math' as math;
 
 class PosePainter extends CustomPainter {
   final List<Pose> poses;
   final Size absoluteImageSize;
   final InputImageRotation rotation;
+  final bool isRightSide;
 
-  PosePainter(this.poses, this.absoluteImageSize, this.rotation);
+  PosePainter(
+    this.poses,
+    this.absoluteImageSize,
+    this.rotation, {
+    this.isRightSide = true,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     // 1. Get the fitted rectangle (BoxFit.cover) matches CameraPreview logic
-    // CRITICAL FIX: The CameraPreview shows the ROTATED (Upright) image.
-    // So we must fit the ROTATED aspect ratio to the screen.
-    // ML Kit also seemingly returns coordinates in the ROTATED (Upright) space
-    // (since "Direct Mapped" x=x, y=y resulted in Vertical orientation).
-
     final isRotated =
         rotation == InputImageRotation.rotation90deg ||
         rotation == InputImageRotation.rotation270deg;
@@ -26,70 +28,143 @@ class PosePainter extends CustomPainter {
 
     final fitted = applyBoxFit(BoxFit.cover, sourceSize, size);
     final destination = fitted.destination;
-
-    // Calculate the rect within the canvas (centering it)
-    // applyBoxFit returns the geometry, but we need to center that geometry on the canvas.
-    // If destination is larger than size (BoxFit.cover), we center it.
     final rect = Alignment.center.inscribe(destination, Offset.zero & size);
 
     // Style
-    final paintJoint = Paint()
-      ..style = PaintingStyle.fill
-      ..strokeWidth = 4.0
-      ..color = Colors.yellow;
-    final paintBone = Paint()
+    // Active (Neon)
+    final paintBoneActive = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
+      ..strokeWidth = 6.0
+      ..color = const Color(0xFFE100FF);
+
+    final paintJointActive = Paint()
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 8.0
       ..color = Colors.white;
+
+    // Inactive (Dimmed)
+    final paintBoneInactive = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0
+      ..color = const Color(0xFFE100FF).withValues(alpha: 0.2);
+
+    final paintJointInactive = Paint()
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 5.0
+      ..color = Colors.white.withValues(alpha: 0.2);
 
     for (final pose in poses) {
       Offset transform(PoseLandmark landmark) {
-        // Step 1: Normalize (0..1)
-        // using SOURCE size (Upright/Rotated dimensions)
         double px = landmark.x / sourceSize.width;
         double py = landmark.y / sourceSize.height;
-
-        // Step 2: Mirror X (Selfie)
-        px = 1.0 - px;
-
-        // Step 3: Map to Fitted Rect
+        px = 1.0 - px; // Mirror
         return Offset(rect.left + px * rect.width, rect.top + py * rect.height);
       }
 
-      // Draw Landmarks
-      pose.landmarks.forEach((_, landmark) {
-        if (landmark.likelihood > 0.5) {
-          canvas.drawCircle(transform(landmark), 5, paintJoint);
-        }
-      });
-
-      // Draw Bones
-      final connections = [
-        [PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder],
-        [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
-        [PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist],
-        [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow],
-        [PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist],
-        [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
-        [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
-        [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip],
-        [PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee],
-        [PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle],
-        [PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee],
-        [PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle],
-      ];
-
-      for (final pair in connections) {
-        final joint1 = pose.landmarks[pair[0]];
-        final joint2 = pose.landmarks[pair[1]];
-
-        if (joint1 != null &&
-            joint2 != null &&
-            joint1.likelihood > 0.5 &&
-            joint2.likelihood > 0.5) {
-          canvas.drawLine(transform(joint1), transform(joint2), paintBone);
+      // Helper to draw connection with active/inactive state
+      void drawConnection(
+        PoseLandmarkType p1,
+        PoseLandmarkType p2,
+        bool isActive,
+      ) {
+        final l1 = pose.landmarks[p1];
+        final l2 = pose.landmarks[p2];
+        if (l1 != null &&
+            l2 != null &&
+            l1.likelihood > 0.5 &&
+            l2.likelihood > 0.5) {
+          canvas.drawLine(
+            transform(l1),
+            transform(l2),
+            isActive ? paintBoneActive : paintBoneInactive,
+          );
         }
       }
+
+      // Helper to draw joint
+      void drawJoint(PoseLandmarkType type, bool isActive) {
+        final l = pose.landmarks[type];
+        if (l != null && l.likelihood > 0.5) {
+          canvas.drawCircle(
+            transform(l),
+            5,
+            isActive ? paintJointActive : paintJointInactive,
+          );
+        }
+      }
+
+      // --- DRAW SKELETON ---
+
+      // Torso (Neutral/Active)
+      drawConnection(
+        PoseLandmarkType.leftShoulder,
+        PoseLandmarkType.rightShoulder,
+        true,
+      );
+      drawConnection(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip, true);
+      drawConnection(
+        PoseLandmarkType.leftShoulder,
+        PoseLandmarkType.leftHip,
+        !isRightSide,
+      ); // Left side
+      drawConnection(
+        PoseLandmarkType.rightShoulder,
+        PoseLandmarkType.rightHip,
+        isRightSide,
+      ); // Right side
+
+      // Arms (Conditional)
+      drawConnection(
+        PoseLandmarkType.leftShoulder,
+        PoseLandmarkType.leftElbow,
+        !isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.leftElbow,
+        PoseLandmarkType.leftWrist,
+        !isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.rightShoulder,
+        PoseLandmarkType.rightElbow,
+        isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.rightElbow,
+        PoseLandmarkType.rightWrist,
+        isRightSide,
+      );
+
+      // Legs (Conditional)
+      drawConnection(
+        PoseLandmarkType.leftHip,
+        PoseLandmarkType.leftKnee,
+        !isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.leftKnee,
+        PoseLandmarkType.leftAnkle,
+        !isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.rightHip,
+        PoseLandmarkType.rightKnee,
+        isRightSide,
+      );
+      drawConnection(
+        PoseLandmarkType.rightKnee,
+        PoseLandmarkType.rightAnkle,
+        isRightSide,
+      );
+
+      // --- DRAW JOINTS ---
+      pose.landmarks.forEach((type, _) {
+        bool isActive = true;
+        final name = type.toString();
+        if (name.contains("right")) isActive = isRightSide;
+        if (name.contains("left")) isActive = !isRightSide;
+        drawJoint(type, isActive);
+      });
     }
   }
 

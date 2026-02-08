@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart'; // For kIsWeb
 import '../main.dart'; // Import to access the 'cameras' list
 import '../services/pose_detection_service.dart';
 import '../painters/pose_painter.dart';
+import 'glass_feedback_panel.dart'; // Import the new widget
 
 class LiveFeedSection extends StatefulWidget {
   const LiveFeedSection({super.key});
@@ -23,6 +24,8 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   Size? _cameraImageSize;
   InputImageRotation? _rotation;
   CameraDescription? _frontCamera;
+
+  // Feedback State
   double _currentAngle = 0.0;
   String _feedbackMessage = "Keep Moving";
   Color _feedbackColor = Colors.orange;
@@ -47,7 +50,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
     _controller = CameraController(
       _frontCamera!,
-      ResolutionPreset.medium, // 'medium' is enough for ML Kit (480p/720p).
+      ResolutionPreset.medium, // 'medium' (480p) for better performance
       enableAudio: false, // We don't need audio for vision
       imageFormatGroup: ImageFormatGroup.yuv420, // Required for Android ML Kit
     );
@@ -67,10 +70,9 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
         if (!mounted) return;
 
-        // 🔥 DEBUG
-        debugPrint("🔥🔥🔥 DETECTED POSES: ${poses.length}");
+        if (!mounted) return;
 
-        // Calculate Angle
+        // Calculate Angle for UI
         double angle = 0.0;
         String message = "Keep Moving";
         Color color = Colors.orange;
@@ -85,38 +87,38 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
             angle = PoseDetectionService.getAngle(shoulder, elbow, wrist);
 
             // Feedback Logic
-            if (angle < 50) {
-              color = Colors.green;
-              message = "Good Hold";
-            } else if (angle > 160) {
+            if (angle < 45) {
+              // Match Web Parity (<45)
               color = Colors.blue;
-              message = "Fully Extended";
+              message = "FLEXED";
+            } else if (angle > 160) {
+              color = Colors.green;
+              message = "EXTENDED";
+            } else {
+              message = "MOVING";
             }
           }
         }
 
         // Only update UI if there are actual changes
-        if (poses.isNotEmpty || _poses.isNotEmpty) {
-          // Check if we need to update (avoid unnecessary setState)
-          bool shouldUpdate =
-              poses.length != _poses.length ||
-              (_currentAngle - angle).abs() >
-                  0.5 || // Only update if angle changed by >0.5°
-              message != _feedbackMessage;
+        bool shouldUpdate =
+            poses.length != _poses.length ||
+            (_currentAngle - angle).abs() >
+                1.0 || // Update if angle changed > 1 degree
+            message != _feedbackMessage;
 
-          if (shouldUpdate) {
-            setState(() {
-              _poses = poses;
-              _currentAngle = angle;
-              _feedbackMessage = message;
-              _feedbackColor = color;
-              _cameraImageSize = Size(
-                image.width.toDouble(),
-                image.height.toDouble(),
-              );
-              _rotation = InputImageRotation.rotation270deg;
-            });
-          }
+        if (shouldUpdate) {
+          setState(() {
+            _poses = poses;
+            _currentAngle = angle;
+            _feedbackMessage = message;
+            _feedbackColor = color;
+            _cameraImageSize = Size(
+              image.width.toDouble(),
+              image.height.toDouble(),
+            );
+            _rotation = InputImageRotation.rotation270deg;
+          });
         }
       });
 
@@ -169,41 +171,16 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
               painter: PosePainter(_poses, _cameraImageSize!, _rotation!),
             ),
 
-          // 3. The Score/Angle Overlay (Safe Area + Aligned)
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                margin: const EdgeInsets.only(top: 20),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black87, // High contrast opaque background
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      "Angle: ${_currentAngle.toStringAsFixed(1)}°",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      _feedbackMessage,
-                      style: TextStyle(
-                        color: _feedbackColor,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+          // 3. Glassmorphic Feedback Panel (Fixed Position)
+          Positioned(
+            bottom: 40,
+            left: 20,
+            right: 20,
+            child: Center(
+              child: GlassFeedbackPanel(
+                angle: _currentAngle,
+                feedback: _feedbackMessage,
+                color: _feedbackColor,
               ),
             ),
           ),

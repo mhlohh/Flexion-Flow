@@ -14,6 +14,8 @@ class PoseDetectionService {
   final PoseDetector _poseDetector = PoseDetector(
     options: PoseDetectorOptions(
       mode: PoseDetectionMode.stream, // Optimized for real-time video
+      model:
+          PoseDetectionModel.accurate, // Best quality (slower but more precise)
     ),
   );
   bool _isBusy = false;
@@ -27,20 +29,17 @@ class PoseDetectionService {
   double? _previousAngle;
   // _smoothingFactor removed as it's no longer used
 
-  int _frameCount = 0;
-  final int _processEveryNthFrame =
-      2; // Reduced from 3 to 2 for smoother tracking
+  DateTime _lastPoseTime = DateTime.now(); // Added for persistence
 
   Future<List<Pose>> detectPose(
     CameraImage image,
     CameraDescription camera,
     DeviceOrientation deviceOrientation,
   ) async {
-    // Frame skipping
-    _frameCount++;
-    if (_frameCount % _processEveryNthFrame != 0) {
-      return [];
-    }
+    // Frame throttling (REMOVED for maximum smoothness)
+    // We rely on _isBusy to prevent overlapping calls.
+    // _frameCount++;
+    // if (_frameCount % _processEveryNthFrame != 0) return [];
 
     // Throttling
     if (_isBusy) return [];
@@ -56,10 +55,18 @@ class PoseDetectionService {
 
       final poses = await _poseDetector.processImage(inputImage);
 
+      // Persistence Logic: If no pose found, return last known pose for short duration
       if (poses.isEmpty) {
-        _previousLandmarks = null; // Reset smoothing on loss of tracking
+        if (_previousLandmarks != null &&
+            DateTime.now().difference(_lastPoseTime).inMilliseconds < 300) {
+          // Return phantom pose to prevent flicker
+          return [Pose(landmarks: _previousLandmarks!)];
+        }
         return [];
       }
+
+      // Found a pose! Update timestamp and smooth
+      _lastPoseTime = DateTime.now();
 
       // Apply smoothing to the first pose (assuming single user)
       final rawPose = poses.first;
@@ -86,7 +93,11 @@ class PoseDetectionService {
     rawPose.landmarks.forEach((type, currentLandmark) {
       final previousLandmark = _previousLandmarks![type];
 
-      if (previousLandmark == null) {
+      if (currentLandmark.likelihood < 0.6) {
+        // If confidence is low, don't smooth. Just use current (or could return null if strict)
+        // Resetting smoothing for this landmark might be better to avoid dragging it
+        smoothedLandmarks[type] = currentLandmark;
+      } else if (previousLandmark == null) {
         smoothedLandmarks[type] = currentLandmark;
       } else {
         // Apply EWMA smoothing to X, Y, and Z
