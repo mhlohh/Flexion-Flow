@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   // Singleton pattern
@@ -12,6 +13,8 @@ class AuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance; // Firestore instance
   bool _isInitialized = false;
 
   // Initialize GoogleSignIn with configuration
@@ -125,5 +128,37 @@ class AuthService {
     } catch (e) {
       debugPrint('Error signing out: $e');
     }
+  }
+
+  // Save User Baseline (Max ROM)
+  Future<void> updateUserBaseline(double angle) async {
+    final user = currentUser;
+    if (user == null) return;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).set({
+        'personal_max_rom': angle,
+        'last_calibrated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      debugPrint("Baseline saved: $angle");
+    } catch (e) {
+      debugPrint("Error saving baseline: $e");
+    }
+  }
+
+  // Get User Baseline
+  Future<double?> getUserBaseline() async {
+    final user = currentUser;
+    if (user == null) return null;
+
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists && doc.data()!.containsKey('personal_max_rom')) {
+        return (doc.data()!['personal_max_rom'] as num).toDouble();
+      }
+    } catch (e) {
+      debugPrint("Error fetching baseline: $e");
+    }
+    return null;
   }
 }

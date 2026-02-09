@@ -7,9 +7,19 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'glass_feedback_panel.dart'; // Import Glass Widget
+import '../enums/exercise_type.dart'; // Import ExerciseType enum
 
 class LiveFeedSection extends StatefulWidget {
-  const LiveFeedSection({super.key});
+  final Function(double)? onAngleUpdate;
+  final double? targetAngle;
+  final ExerciseType? exerciseType;
+
+  const LiveFeedSection({
+    super.key,
+    this.onAngleUpdate,
+    this.targetAngle,
+    this.exerciseType,
+  });
 
   @override
   State<LiveFeedSection> createState() => _LiveFeedSectionState();
@@ -131,15 +141,35 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
                 if (p1 != null && p2 != null && p3 != null) {
                   angle = _calculateAngle(p1, p2, p3);
                   // Feedback Logic
-                  if (angle < 50) {
-                    // User requested 50 for Web
-                    color = Colors.blue;
-                    message = "FLEXED";
-                  } else if (angle > 160) {
-                    color = Colors.green;
-                    message = "EXTENDED";
+                  final double target = widget.targetAngle ?? 160;
+
+                  if (widget.exerciseType == ExerciseType.elbowFlexion) {
+                    if (angle < 50) {
+                      color = Colors.green;
+                      message = "Good Curl!";
+                    } else if (angle > 160) {
+                      color = Colors.blue;
+                      message = "Fully Extended";
+                    } else {
+                      message = "Keep going...";
+                      color = Colors.orange;
+                    }
                   } else {
-                    message = "MOVING";
+                    // Default
+                    if (angle < 50) {
+                      color = Colors.blue;
+                      message = "FLEXED";
+                    } else if (angle > target) {
+                      color = Colors.green;
+                      message = "EXTENDED";
+                    } else {
+                      message = "MOVING";
+                    }
+                  }
+
+                  // Trigger callback
+                  if (widget.onAngleUpdate != null) {
+                    widget.onAngleUpdate!(angle);
                   }
                 }
               }

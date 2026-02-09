@@ -6,9 +6,19 @@ import '../main.dart'; // Import to access the 'cameras' list
 import '../services/pose_detection_service.dart';
 import '../painters/pose_painter.dart';
 import 'glass_feedback_panel.dart'; // Import the new widget
+import '../enums/exercise_type.dart'; // Import ExerciseType enum
 
 class LiveFeedSection extends StatefulWidget {
-  const LiveFeedSection({super.key});
+  final Function(double)? onAngleUpdate;
+  final double? targetAngle;
+  final ExerciseType? exerciseType;
+
+  const LiveFeedSection({
+    super.key,
+    this.onAngleUpdate,
+    this.targetAngle,
+    this.exerciseType,
+  });
 
   @override
   State<LiveFeedSection> createState() => _LiveFeedSectionState();
@@ -137,16 +147,40 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
 
           if (isValid) {
             angle = PoseDetectionService.getAngle(shoulder!, elbow!, wrist!);
+
+            // Callback for Calibration
+            if (widget.onAngleUpdate != null) {
+              widget.onAngleUpdate!(angle);
+            }
+
             // Feedback Logic
-            if (angle < 60) {
-              // Relaxed to 60 for Mobile
-              color = Colors.blue;
-              message = "FLEXED";
-            } else if (angle > 160) {
-              color = Colors.green;
-              message = "EXTENDED";
+            // Use dynamic target if provided, else default to 160
+            final double target = widget.targetAngle ?? 160;
+
+            if (widget.exerciseType == ExerciseType.elbowFlexion) {
+              // Specific Logic for Elbow Flexion (Bicep Curl)
+              if (angle < 50) {
+                color = Colors.green;
+                message = "Good Curl!";
+              } else if (angle > 160) {
+                color = Colors.blue;
+                message = "Fully Extended";
+              } else {
+                message = "Keep going...";
+                color = Colors.orange;
+              }
             } else {
-              message = "MOVING";
+              // Default / Calibration Logic
+              if (angle < 60) {
+                // Relaxed to 60 for Mobile
+                color = Colors.blue;
+                message = "FLEXED";
+              } else if (angle > target) {
+                color = Colors.green;
+                message = "EXTENDED"; // Or "GOOD HOLD"
+              } else {
+                message = "MOVING";
+              }
             }
           } else {
             // OPTIONAL: If confidence drops, keep old angle?
@@ -168,19 +202,30 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
           }
         }
 
-        if (mounted) {
-          setState(() {
-            _poses = posesToDisplay;
-            _currentAngle = angle;
-            _feedbackMessage = message;
-            _feedbackColor = color;
-            _isRightSide = isRight;
-            _cameraImageSize = Size(
-              image.width.toDouble(),
-              image.height.toDouble(),
-            );
-            _rotation = InputImageRotation.rotation270deg;
-          });
+        // Only update UI if there are actual changes
+        if (posesToDisplay.isNotEmpty || _poses.isNotEmpty) {
+          bool shouldUpdate =
+              posesToDisplay.length != _poses.length ||
+              (_currentAngle - angle).abs() > 0.5 ||
+              message != _feedbackMessage ||
+              isRight != _isRightSide;
+
+          if (shouldUpdate) {
+            if (mounted) {
+              setState(() {
+                _poses = posesToDisplay;
+                _currentAngle = angle;
+                _feedbackMessage = message;
+                _feedbackColor = color;
+                _isRightSide = isRight;
+                _cameraImageSize = Size(
+                  image.width.toDouble(),
+                  image.height.toDouble(),
+                );
+                _rotation = InputImageRotation.rotation270deg;
+              });
+            }
+          }
         }
       });
 
@@ -221,9 +266,23 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
         fit: StackFit.expand,
         children: [
           // 1. The Camera Feed
-          _isCameraInitialized
+          _isCameraInitialized &&
+                  _controller != null &&
+                  _controller!.value.isInitialized
               ? CameraPreview(_controller!)
-              : const Center(child: CircularProgressIndicator()),
+              : const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 16),
+                      Text(
+                        "Initializing Camera...",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
           // 2. Pose Painter Overlay
           if (_isCameraInitialized &&
               _poses.isNotEmpty &&

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/therapy_session_screen.dart';
+import 'screens/main_screen.dart';
 import 'screens/login_screen.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'services/auth_service.dart';
@@ -68,9 +68,9 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // If user is logged in, show TherapySessionScreen
+        // If user is logged in, show MainScreen (Dashboard)
         if (snapshot.hasData && snapshot.data != null) {
-          return const TherapySessionScreen();
+          return const MainScreen();
         }
 
         // Otherwise, show LoginScreen

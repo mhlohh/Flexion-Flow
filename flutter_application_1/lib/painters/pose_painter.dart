@@ -177,6 +177,7 @@ class PosePainter extends CustomPainter {
   bool shouldRepaint(covariant PosePainter oldDelegate) {
     return oldDelegate.poses != poses ||
         oldDelegate.absoluteImageSize != absoluteImageSize ||
-        oldDelegate.rotation != rotation;
+        oldDelegate.rotation != rotation ||
+        oldDelegate.isRightSide != isRightSide;
   }
 }
