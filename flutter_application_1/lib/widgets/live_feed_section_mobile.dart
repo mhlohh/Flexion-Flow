@@ -230,7 +230,12 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
               _cameraImageSize != null &&
               _rotation != null)
             CustomPaint(
-              painter: PosePainter(_poses, _cameraImageSize!, _rotation!),
+              painter: PosePainter(
+                _poses,
+                _cameraImageSize!,
+                _rotation!,
+                isRightSide: _isRightSide,
+              ),
             ),
 
           // 3. Glassmorphic Feedback Panel (Fixed Position)
