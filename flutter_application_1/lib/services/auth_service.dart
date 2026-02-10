@@ -161,4 +161,32 @@ class AuthService {
     }
     return null;
   }
+
+  // Save completed workout to history
+  Future<void> saveWorkoutHistory({
+    required String exerciseType,
+    required int setsCompleted,
+    required int repsPerSet,
+    required DateTime timestamp,
+  }) async {
+    final user = currentUser;
+    if (user == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('workout_history')
+          .add({
+            'exercise': exerciseType,
+            'sets': setsCompleted,
+            'reps': repsPerSet,
+            'timestamp': timestamp,
+            'total_reps': setsCompleted * repsPerSet,
+          });
+      debugPrint("✅ Workout history saved!");
+    } catch (e) {
+      debugPrint("❌ Error saving workout history: $e");
+    }
+  }
 }

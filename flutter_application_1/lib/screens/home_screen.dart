@@ -51,7 +51,7 @@ class HomeScreen extends StatelessWidget {
               // Exercise List
               ExerciseCard(
                 title: "Elbow Flexion",
-                subtitle: "Range of Motion: 50° - 160°",
+                subtitle: "3 sets × 10 reps",
                 // time: "5 min",
                 icon: Icons.fitness_center,
                 onTap: () {
@@ -59,6 +59,8 @@ class HomeScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (context) => const TherapySessionScreen(
                         exerciseType: ExerciseType.elbowFlexion,
+                        sets: 3,
+                        repsPerSet: 10,
                       ),
                     ),
                   );

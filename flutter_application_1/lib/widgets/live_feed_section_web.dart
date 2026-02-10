@@ -13,12 +13,20 @@ class LiveFeedSection extends StatefulWidget {
   final Function(double)? onAngleUpdate;
   final double? targetAngle;
   final ExerciseType? exerciseType;
+  final int? currentRep;
+  final int? targetReps;
+  final int? currentSet;
+  final int? targetSets;
 
   const LiveFeedSection({
     super.key,
     this.onAngleUpdate,
     this.targetAngle,
     this.exerciseType,
+    this.currentRep,
+    this.targetReps,
+    this.currentSet,
+    this.targetSets,
   });
 
   @override
@@ -258,6 +266,10 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
                 angle: _currentAngle,
                 feedback: _feedbackMessage,
                 color: _feedbackColor,
+                currentRep: widget.currentRep,
+                targetReps: widget.targetReps,
+                currentSet: widget.currentSet,
+                targetSets: widget.targetSets,
               ),
             ),
           ),

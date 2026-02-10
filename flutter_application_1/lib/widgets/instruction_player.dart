@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 
 class InstructionPlayer extends StatefulWidget {
-  const InstructionPlayer({super.key});
+  final VoidCallback? onReset;
+  final VoidCallback? onTogglePause;
+  final bool isPaused;
+
+  const InstructionPlayer({
+    super.key,
+    this.onReset,
+    this.onTogglePause,
+    this.isPaused = false,
+  });
 
   @override
   State<InstructionPlayer> createState() => _InstructionPlayerState();
@@ -103,32 +112,43 @@ class _InstructionPlayerState extends State<InstructionPlayer> {
             ),
           ),
           const SizedBox(height: 16),
-          // Control Buttons
+          // Navigation Buttons - Replaced with Workout Controls
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.skip_previous),
-                label: const Text('Prev'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF007AFF),
-                  minimumSize: const Size(120, 48),
+              // Reset Button
+              OutlinedButton.icon(
+                onPressed: widget.onReset,
+                icon: const Icon(Icons.refresh, size: 20),
+                label: const Text('Reset'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade700, width: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: Color(0xFF007AFF)),
                   ),
                 ),
               ),
+
+              // Play/Pause Button
               ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.skip_next),
-                label: const Text('Next'),
+                onPressed: widget.onTogglePause,
+                icon: Icon(
+                  widget.isPaused ? Icons.play_arrow : Icons.pause,
+                  size: 20,
+                ),
+                label: Text(widget.isPaused ? 'Resume' : 'Pause'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF007AFF),
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(120, 48),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
