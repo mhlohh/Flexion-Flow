@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 
 class InstructionPlayer extends StatefulWidget {
   const InstructionPlayer({super.key});
@@ -9,42 +8,15 @@ class InstructionPlayer extends StatefulWidget {
 }
 
 class _InstructionPlayerState extends State<InstructionPlayer> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Load video from assets
-    _controller = VideoPlayerController.asset("assets/videos/elbow_flexion.mp4")
-      ..initialize()
-          .then((_) {
-            setState(() {
-              _isInitialized = true;
-            });
-            _controller.setLooping(true);
-            _controller.setVolume(0.0); // Mute audio
-            // _controller.play(); // REMOVED: Manual play only
-          })
-          .catchError((error) {
-            debugPrint("Video Player Error: $error");
-          });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  // GIF path
+  final String _gifPath = "assets/gifs/elbow_flexion.gif";
 
   void _openFullScreen() {
-    if (!_isInitialized) return;
-
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false, // Transparent background for "dark clear skin" effect
         pageBuilder: (context, _, __) {
-          return const FullScreenVideoPlayer();
+          return FullScreenGifPlayer(gifPath: _gifPath);
         },
       ),
     );
@@ -58,7 +30,7 @@ class _InstructionPlayerState extends State<InstructionPlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Video Player Area (Preview)
+          // GIF Player Area (Preview)
           Expanded(
             flex: 3,
             child: GestureDetector(
@@ -73,25 +45,24 @@ class _InstructionPlayerState extends State<InstructionPlayer> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Video Preview (Paused or First Frame)
-                      if (_isInitialized)
-                        AspectRatio(
-                          aspectRatio: _controller.value.aspectRatio,
-                          child: VideoPlayer(_controller),
-                        )
-                      else
-                        const CircularProgressIndicator(color: Colors.white),
+                      // GIF Preview
+                      Image.asset(_gifPath, fit: BoxFit.contain),
 
-                      // Play Button Overlay
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.play_circle_fill,
-                          color: Colors.white,
-                          size: 64,
+                      // Expand Icon Overlay (Optional, to indicate it's clickable)
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.fullscreen,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         ),
                       ),
                     ],
@@ -171,86 +142,23 @@ class _InstructionPlayerState extends State<InstructionPlayer> {
   }
 }
 
-// Full Screen Video Overlay
-class FullScreenVideoPlayer extends StatefulWidget {
-  const FullScreenVideoPlayer({super.key});
+// Full Screen GIF Overlay
+class FullScreenGifPlayer extends StatelessWidget {
+  final String gifPath;
 
-  @override
-  State<FullScreenVideoPlayer> createState() => _FullScreenVideoPlayerState();
-}
-
-class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
-  bool _isPlaying = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.asset("assets/videos/elbow_flexion.mp4")
-      ..initialize().then((_) {
-        setState(() {
-          _isInitialized = true;
-          _isPlaying = true;
-        });
-        _controller.setLooping(true);
-        _controller.play();
-      });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _togglePlay() {
-    setState(() {
-      if (_controller.value.isPlaying) {
-        _controller.pause();
-        _isPlaying = false;
-      } else {
-        _controller.play();
-        _isPlaying = true;
-      }
-    });
-  }
+  const FullScreenGifPlayer({super.key, required this.gifPath});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.9),
+      backgroundColor: Colors.black.withOpacity(0.9), // Dark clear skin
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
-              child: GestureDetector(
-                onTap: _togglePlay,
-                child: _isInitialized
-                    ? AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            VideoPlayer(_controller),
-                            if (!_isPlaying)
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.play_circle_fill,
-                                  color: Colors.white,
-                                  size: 64,
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : const CircularProgressIndicator(color: Colors.white),
-              ),
-            ),
+            // Centered GIF
+            Center(child: Image.asset(gifPath, fit: BoxFit.contain)),
+
+            // Close Button
             Positioned(
               top: 20,
               right: 20,

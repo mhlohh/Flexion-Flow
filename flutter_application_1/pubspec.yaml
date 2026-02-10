@@ -43,7 +43,6 @@ dependencies:
   web: ^1.1.1
   cloud_firestore: ^6.1.2
   google_fonts: ^8.0.1
-  video_player: ^2.10.1
 
 dev_dependencies:
   flutter_test:
@@ -70,6 +69,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/videos/
+    - assets/gifs/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
