@@ -1,9 +1,12 @@
+import '../enums/exercise_type.dart';
+
 /// Manages workout session state including sets, reps, and rep detection
 class WorkoutSession {
   final int targetSets;
   final int targetRepsPerSet;
   final int restDurationSeconds;
   final bool isBilateral; // Track if exercise uses both sides
+  final ExerciseType exerciseType; // Type of exercise being tracked
 
   int currentSet = 1;
   int currentRep = 0;
@@ -20,6 +23,7 @@ class WorkoutSession {
   WorkoutSession({
     required this.targetSets,
     required this.targetRepsPerSet,
+    required this.exerciseType,
     this.isBilateral = true, // Default to bilateral
     this.restDurationSeconds = 60,
     this.onRepCompleted,
@@ -30,38 +34,88 @@ class WorkoutSession {
 
   /// Update the session with the current angle measurement
   void updateAngle(double angle) {
+    // Exercise-specific angle thresholds
+    switch (exerciseType) {
+      case ExerciseType.elbowFlexion:
+        _updateElbowFlexion(angle);
+        break;
+      case ExerciseType.shoulderAbduction:
+        _updateShoulderAbduction(angle);
+        break;
+      case ExerciseType.calibration:
+        // Calibration doesn't use rep detection
+        break;
+    }
+  }
+
+  /// Elbow Flexion: Extended (>160°) → Flexed (<50°) → Extended
+  void _updateElbowFlexion(double angle) {
     switch (_state) {
       case RepState.extended:
         if (angle < 60) {
-          // Hysteresis buffer: entering flexion zone
           _state = RepState.flexing;
         }
         break;
 
       case RepState.flexing:
         if (angle < 50) {
-          // Reached full flexion
           _state = RepState.flexed;
         } else if (angle >= 160) {
-          // User went back up without completing flexion
           _state = RepState.extended;
         }
         break;
 
       case RepState.flexed:
         if (angle > 140) {
-          // Hysteresis buffer: entering extension zone
           _state = RepState.extending;
         }
         break;
 
       case RepState.extending:
         if (angle > 160) {
-          // Reached full extension - REP COMPLETE!
           _state = RepState.extended;
           _completeRep();
         } else if (angle < 50) {
-          // User went back down without completing extension
+          _state = RepState.flexed;
+        }
+        break;
+    }
+  }
+
+  /// Shoulder Abduction: Extended (>160°) → Abducted (<30°) → Extended
+  void _updateShoulderAbduction(double angle) {
+    switch (_state) {
+      case RepState.extended:
+        if (angle < 100) {
+          // Starting to abduct (raise arm)
+          _state = RepState.flexing; // Reusing flexing state for abducting
+        }
+        break;
+
+      case RepState.flexing: // Abducting phase
+        if (angle < 30) {
+          // Reached full abduction (arm raised)
+          _state = RepState.flexed; // Reusing flexed state for abducted
+        } else if (angle >= 160) {
+          // Returned to starting position without completing
+          _state = RepState.extended;
+        }
+        break;
+
+      case RepState.flexed: // Abducted (arm up)
+        if (angle > 100) {
+          // Starting to adduct (lower arm)
+          _state = RepState.extending; // Reusing extending state for adducting
+        }
+        break;
+
+      case RepState.extending: // Adducting phase
+        if (angle > 160) {
+          // Returned to starting position - REP COMPLETE!
+          _state = RepState.extended;
+          _completeRep();
+        } else if (angle < 30) {
+          // Raised arm again without completing
           _state = RepState.flexed;
         }
         break;

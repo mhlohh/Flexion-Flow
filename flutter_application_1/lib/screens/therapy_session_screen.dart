@@ -47,6 +47,7 @@ class _TherapySessionScreenState extends State<TherapySessionScreen> {
       _workoutSession = WorkoutSession(
         targetSets: widget.sets!,
         targetRepsPerSet: widget.repsPerSet!,
+        exerciseType: widget.exerciseType ?? ExerciseType.elbowFlexion,
         isBilateral: true, // Elbow flexion is bilateral
         onRepCompleted: (rep) {
           setState(() {}); // Trigger UI update
