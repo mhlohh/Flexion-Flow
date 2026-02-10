@@ -446,10 +446,11 @@ class WebPosePainter extends CustomPainter {
         // Even numbers are Right (12, 14, 16...)
         // 0 is Nose (Neutral)
         if (i > 0) {
-          if (i % 2 != 0)
+          if (i % 2 != 0) {
             isActive = !isRightSide; // Odd = Left
-          else
+          } else {
             isActive = isRightSide; // Even = Right
+          }
         }
 
         canvas.drawCircle(

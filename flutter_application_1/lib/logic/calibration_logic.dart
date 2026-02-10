@@ -1,5 +1,5 @@
 class CalibrationSession {
-  List<double> _peaks = [];
+  final List<double> _peaks = [];
   double _currentMax = 0;
   bool _isRising = true;
 

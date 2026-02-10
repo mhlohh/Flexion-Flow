@@ -49,7 +49,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
   Color _feedbackColor = Colors.orange;
   bool _isRightSide = true;
   DateTime _lastValidPoseTime = DateTime.now(); // For Persistence Logic
-  int _sideSwitchCounter = 0; // Debounce counter for side switching
+  final int _sideSwitchCounter = 0; // Debounce counter for side switching
 
   @override
   void initState() {
@@ -154,7 +154,7 @@ class _LiveFeedSectionState extends State<LiveFeedSection> {
               wrist.likelihood > 0.4;
 
           if (isValid) {
-            angle = PoseDetectionService.getAngle(shoulder!, elbow!, wrist!);
+            angle = PoseDetectionService.getAngle(shoulder, elbow, wrist);
 
             // Callback for Calibration
             if (widget.onAngleUpdate != null) {
