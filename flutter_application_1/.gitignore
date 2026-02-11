@@ -43,3 +43,28 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 🔒 SECURITY: API Keys and Secrets
+# These files contain sensitive Firebase credentials and should NEVER be committed
+.env
+.env.local
+.env.*.local
+
+# Firebase configuration files (contain API keys)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Sensitive documentation that may contain keys
+YOUR_SHA_KEYS.md
+FIREBASE_SETUP.md
+
+# Other sensitive files
+*.p12
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+.firebase/
+firebase-debug.log
+firestore-debug.log

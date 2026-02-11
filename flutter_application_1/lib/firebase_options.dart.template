@@ -14,6 +14,11 @@ import 'package:flutter/foundation.dart'
 ///   options: DefaultFirebaseOptions.currentPlatform,
 /// );
 /// ```
+/// 
+/// ⚠️ SECURITY NOTE:
+/// This is a TEMPLATE file. Copy this to `lib/firebase_options.dart` and replace
+/// the placeholder values with your actual Firebase configuration from Firebase Console.
+/// Never commit the real firebase_options.dart file with actual API keys!
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -41,12 +46,14 @@ class DefaultFirebaseOptions {
     }
   }
 
+  // 🔒 REPLACE THESE VALUES WITH YOUR ACTUAL FIREBASE WEB CONFIGURATION
+  // Get these from: Firebase Console > Project Settings > Your Web App
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCXnDjDBqhsnPS7_VAU2vmZset1dnMxy9w', // Corrected API Key
-    appId: '1:353454091403:web:5c54ad5dd2b74c608c788e', // From screenshot
-    messagingSenderId: '353454091403',
-    projectId: 'flexion-flow',
-    authDomain: 'flexion-flow.firebaseapp.com',
-    storageBucket: 'flexion-flow.firebasestorage.app',
+    apiKey: 'YOUR_FIREBASE_WEB_API_KEY_HERE',           // Replace this
+    appId: 'YOUR_FIREBASE_APP_ID_HERE',                 // Replace this
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE', // Replace this
+    projectId: 'your-project-id',                       // Replace this
+    authDomain: 'your-project.firebaseapp.com',         // Replace this
+    storageBucket: 'your-project.firebasestorage.app',  // Replace this
   );
 }
